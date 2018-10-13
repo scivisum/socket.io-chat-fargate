@@ -1,15 +1,7 @@
 Parameters:
-  GitHubRepo:
-    Type: String
-  GitHubBranch:
-    Type: String
-  GitHubToken:
-    Type: String
-    NoEcho: true
-  GitHubUser:
-    Type: String
   EnvironmentName:
     Type: String
+    Description: E.g. production, staging, branch name. Must be lowercase (for use in bucket name).
   CertificateArn:
     Type: String
     Description: ARN of the Amazon Certificate Manager SSL certificate to use for this app
@@ -19,6 +11,32 @@ Resources:
   Repository:
     Type: AWS::ECR::Repository
     DeletionPolicy: Delete
+
+  # A role to give cloudwatch events permission to start the code pipeline (i.e. S3 bucket change)
+  CloudWatchEventRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        -
+          PolicyName: cwe-pipeline-execution
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action: codepipeline:StartPipelineExecution
+                Resource: !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref Pipeline ] ]
+
 
   # A role used to give CodeBuild permission to access code,
   # build it, and upload the build results to ECR
@@ -93,6 +111,7 @@ Resources:
               - Resource: "*"
                 Effect: Allow
                 Action:
+                  - s3:PutObject
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
                   - iam:PassRole
@@ -146,7 +165,11 @@ Resources:
   ArtifactBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
-    BucketName: !Sub ${Environment}-build-artifacts
+    Properties:
+        BucketName: !Sub ${EnvironmentName}-build-artifacts
+        # Must be a versioned bucket for use as a CodePipeline source
+        VersioningConfiguration:
+          Status: Enabled
 
   # This is the definition of how to build the code in the repository
   CodeBuildProject:
@@ -185,6 +208,81 @@ Resources:
       Name: !Ref AWS::StackName
       ServiceRole: !Ref CodeBuildServiceRole
 
+  # Trigger Pipeline when event is triggered signalling bundle.tar.gz is updated in S3.
+  CloudWatchEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - 'AWS API Call via CloudTrail'
+        detail:
+          eventSource:
+            - s3.amazonaws.com
+          eventName:
+            - PutObject
+            - CompleteMultipartUpload
+          resources:
+            ARN:
+              - !Join [ '', [ !GetAtt ArtifactBucket.Arn, '/bundle.tar.gz'] ]
+      Targets:
+        -
+          Arn:
+            !Join [ '', [ 'arn:aws:codepipeline:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId', ':', !Ref Pipeline ] ]
+          RoleArn: !GetAtt CloudWatchEventRole.Arn
+          Id: codepipeline-AppPipeline
+
+  # Create the CloudTrail resource that will trigger the event to start Pipeline
+  CloudTrail:
+    DependsOn:
+      - CloudTrailBucketPolicy
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      S3BucketName: !Ref CloudTrailBucket
+      EventSelectors:
+        -
+          DataResources:
+            -
+              Type: AWS::S3::Object
+              Values:
+                - !Join [ '', [ !GetAtt ArtifactBucket.Arn, '/bundle.tar.gz' ] ]
+          ReadWriteType: WriteOnly
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+  # Create a bucket for CloudTrail - apparently required to create a CloudTrail resource.
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+  # Bucket policy allowing CloudTrail to write logs to it.
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          -
+            Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Join [ '', [ !GetAtt CloudTrailBucket.Arn, '/AWSLogs/', !Ref 'AWS::AccountId', '/*' ] ]
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
   # This pipeline defines the steps to build, deploy, and release the application
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -195,20 +293,18 @@ Resources:
         Location: !Ref ArtifactBucket
       Stages:
 
-        # First we have to pull the source code from the Github repository.
+        # First we have to pull the source code
         - Name: Source
           Actions:
             - Name: App
               ActionTypeId:
                 Category: Source
-                Owner: ThirdParty
+                Owner: AWS
                 Version: 1
-                Provider: GitHub
+                Provider: S3
               Configuration:
-                Owner: !Ref GitHubUser
-                Repo: !Ref GitHubRepo
-                Branch: !Ref GitHubBranch
-                OAuthToken: !Ref GitHubToken
+                S3Bucket: !Ref ArtifactBucket
+                S3ObjectKey: bundle.tar.gz
               OutputArtifacts:
                 - Name: Source
               RunOrder: 1
