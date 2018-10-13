@@ -6,6 +6,7 @@ var compression = require('compression');
 var path = require('path');
 var enforce = require('express-sslify');
 var config = require('./lib/config');
+var redisFactory = require('redis')
 
 var app = express();
 
@@ -21,6 +22,8 @@ var server = require('http').createServer(app);
 var io = require('socket.io')(server);
 var redis = require('socket.io-redis');
 io.adapter(redis({ host: config.REDIS_ENDPOINT, port: 6379 }));
+
+var redisSessionClient = redisFactory.createClient(config.REDIS_SESSIONS_ENDPOINT)
 
 var Presence = require('./lib/presence');
 var User = require('./lib/user');
@@ -59,22 +62,24 @@ io.on('connection', function(socket) {
       return callback('Must pass a parameter `message` which is a string');
     }
 
-    var messageBody = {
-      room: data.room,
-      time: Date.now(),
-      content: {
-        text: data.message,
-      },
-      username: socket.username,
-      avatar: socket.avatar
-    };
+    redisSessionsClient.scan("*", function (err, reply) {
+      var messageBody = {
+        room: data.room,
+        time: Date.now(),
+        content: {
+          text: data.message + " :: " + JSON.stringify(err) + " :: " + JSON.stringify(reply),
+        },
+        username: socket.username,
+        avatar: socket.avatar
+      };
 
-    // Store the messages in DynamoDB
-    messageBody.message = await Message.add(messageBody);
+      // Store the messages in DynamoDB
+      messageBody.message = await Message.add(messageBody);
 
-    socket.broadcast.emit('new message', messageBody);
+      socket.broadcast.emit('new message', messageBody);
 
-    return callback(null, messageBody);
+      return callback(null, messageBody);
+    })
   });
 
   socket.on('message list', async function(from, callback) {

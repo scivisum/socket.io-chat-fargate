@@ -31,7 +31,8 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Access to the Fargate containers
-      VpcId: Fn::ImportValue: !Sub ${MonitorStackName}:VPC
+      VpcId:
+        Fn::ImportValue: !Sub ${MonitorStackName}:VPC
   EcsSecurityGroupIngressFromPublicALB:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -47,6 +48,16 @@ Resources:
       IpProtocol: -1
       SourceSecurityGroupId: !Ref 'FargateContainerSecurityGroup'
 
+  # svMonitor sessions Redis cache access
+  RedisSessionsSecurityGroupIngressFromECS:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from the public ALB
+      GroupId:
+        Fn::ImportValue: !Sub ${MonitorStackName}:RedisSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref FargateContainerSecurityGroup
+
   # Load balancers for getting traffic to containers.
   # This sample template creates one load balancer:
   #
@@ -60,12 +71,13 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Access to the public facing load balancer
-      VpcId: Fn::ImportValue: !Sub ${MonitorStackName}:VPC
+      VpcId:
+        Fn::ImportValue: !Sub ${MonitorStackName}:VPC
       SecurityGroupIngress:
           # Allow access to ALB from anywhere on the internet
           - CidrIp: 0.0.0.0/0
             IpProtocol: -1
-  PublicLoadBalancer:
+  PublicLoadBalancerV2:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internet-facing
@@ -82,8 +94,8 @@ Resources:
     Type: AWS::Route53::RecordSet
     Properties:
       AliasTarget:
-        DNSName: !GetAtt [ PublicLoadBalancer, DNSName ]
-        HostedZoneId: !GetAtt [ PublicLoadBalancer, CanonicalHostedZoneID ]
+        DNSName: !GetAtt [ PublicLoadBalancerV2, DNSName ]
+        HostedZoneId: !GetAtt [ PublicLoadBalancerV2, CanonicalHostedZoneID ]
       HostedZoneId: Z2U62L6KYCZ71V  # scivisum.co.uk
       Name: !Sub chat-${EnvironmentName}.scivisum.co.uk
       Type: A
@@ -98,31 +110,32 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
-      Name: !Join ['-', [!Ref 'EnvironmentName', 'drop-1']]
+      Name: !Join ['-', [!Ref 'EnvironmentName', 'drop-v2']]
       Port: 80
       Protocol: HTTP
       UnhealthyThresholdCount: 2
-      VpcId: Fn::ImportValue: !Sub ${MonitorStackName}:PublicSubnet0
+      VpcId:
+        Fn::ImportValue: !Sub ${MonitorStackName}:VPC
   PublicLoadBalancerListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn:
-      - PublicLoadBalancer
+      - PublicLoadBalancerV2
     Properties:
       DefaultActions:
         - TargetGroupArn: !Ref 'DummyTargetGroupPublic'
           Type: 'forward'
-      LoadBalancerArn: !Ref 'PublicLoadBalancer'
+      LoadBalancerArn: !Ref 'PublicLoadBalancerV2'
       Port: 80
       Protocol: HTTP
   PublicLoadBalancerListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn:
-      - PublicLoadBalancer
+      - PublicLoadBalancerV2
     Properties:
       DefaultActions:
         - TargetGroupArn: !Ref 'DummyTargetGroupPublic'
           Type: 'forward'
-      LoadBalancerArn: !Ref 'PublicLoadBalancer'
+      LoadBalancerArn: !Ref 'PublicLoadBalancerV2'
       Port: 443
       Protocol: HTTPS
       Certificates:
@@ -231,7 +244,7 @@ Outputs:
       Name: !Join [ ':', [ !Ref 'EnvironmentName', 'ClusterName' ] ]
   ExternalUrl:
     Description: The url of the external load balancer
-    Value: !Join ['', ['http://', !GetAtt 'PublicLoadBalancer.DNSName']]
+    Value: !Join ['', ['http://', !GetAtt 'PublicLoadBalancerV2.DNSName']]
     Export:
       Name: !Join [ ':', [ !Ref 'EnvironmentName', 'ExternalUrl' ] ]
   ECSRole:

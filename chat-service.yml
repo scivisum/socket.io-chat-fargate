@@ -85,6 +85,9 @@ Resources:
               Value:
                 Fn::ImportValue:
                   !Join [':', [!Ref 'EnvironmentName', 'RedisEndpoint']]
+            - Name: REDIS_SESSIONS_ENDPOINT
+              Value:
+                Fn::ImportValue: !Sub ${MonitorStackName}:RedisEndpoint
             - Name: DYNAMODB_ENDPOINT
               Value: !Join ['.', ['https://dynamodb', !Ref 'AWS::Region', 'amazonaws.com']]
             - Name: ENV_NAME
@@ -156,7 +159,8 @@ Resources:
           Value: true
         - Key: deregistration_delay.timeout_seconds
           Value: 30
-      VpcId: Fn::ImportValue: !Sub ${MonitorStackName}:VPC
+      VpcId:
+        Fn::ImportValue: !Sub ${MonitorStackName}:VPC
 
   # Create rules to forward both HTTP and HTTPS traffic to the service's
   # target group. The service itself will handle redirecting HTTP traffic
