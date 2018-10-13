@@ -7,6 +7,7 @@ module.exports = {
   REGION: process.env.REGION || 'us-east-1',
 
   REDIS_ENDPOINT: process.env.REDIS_ENDPOINT,
+  REDIS_SESSIONS_ENDPOINT: process.env.REDIS_SESSIONS_ENDPOINT,
   DYNAMODB_ENDPOINT: new AWS.Endpoint(process.env.DYNAMODB_ENDPOINT),
 
   // Controls how often clients ping back and forth

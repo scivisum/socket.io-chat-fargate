@@ -23,7 +23,7 @@ var io = require('socket.io')(server);
 var redis = require('socket.io-redis');
 io.adapter(redis({ host: config.REDIS_ENDPOINT, port: 6379 }));
 
-var redisSessionClient = redisFactory.createClient(config.REDIS_SESSIONS_ENDPOINT)
+//var redisSessionClient = redisFactory.createClient(config.REDIS_SESSIONS_ENDPOINT)
 
 var Presence = require('./lib/presence');
 var User = require('./lib/user');
@@ -62,7 +62,7 @@ io.on('connection', function(socket) {
       return callback('Must pass a parameter `message` which is a string');
     }
 
-    redisSessionsClient.scan("*", function (err, reply) {
+    //redisSessionsClient.scan("0", async function (err, reply) {
       var messageBody = {
         room: data.room,
         time: Date.now(),
@@ -79,7 +79,7 @@ io.on('connection', function(socket) {
       socket.broadcast.emit('new message', messageBody);
 
       return callback(null, messageBody);
-    })
+    //})
   });
 
   socket.on('message list', async function(from, callback) {
