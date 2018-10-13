@@ -18,7 +18,7 @@ Resources:
   # Create the ECR respository to hold built docker images
   Repository:
     Type: AWS::ECR::Repository
-    DeletionPolicy: Retain
+    DeletionPolicy: Delete
 
   # A role used to give CodeBuild permission to access code,
   # build it, and upload the build results to ECR
@@ -145,7 +145,8 @@ Resources:
   # While the build is in progress we need a place to store artifacts
   ArtifactBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
+    DeletionPolicy: Delete
+    BucketName: !Sub {Environment}-build-artifacts
 
   # This is the definition of how to build the code in the repository
   CodeBuildProject:
