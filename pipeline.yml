@@ -146,7 +146,7 @@ Resources:
   ArtifactBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
-    BucketName: !Sub {Environment}-build-artifacts
+    BucketName: !Sub ${Environment}-build-artifacts
 
   # This is the definition of how to build the code in the repository
   CodeBuildProject:
