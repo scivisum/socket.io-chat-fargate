@@ -165,7 +165,7 @@ Resources:
         DNSName: !GetAtt [ PublicLoadBalancer, DNSName ]
         HostedZoneId: !GetAtt [ PublicLoadBalancer, CanonicalHostedZoneID ]
       HostedZoneId: Z2U62L6KYCZ71V  # scivisum.co.uk
-      Name: !Sub chat.${EnvironmentName}.scivisum.co.uk
+      Name: !Sub chat-${EnvironmentName}.scivisum.co.uk
       Type: A
 
   # A dummy target group is used to setup the ALB to just drop traffic
