@@ -6,6 +6,9 @@ Parameters:
     Default: production
     Description: The environment name, used for locating outputs from the
                  prerequisite stacks
+  MonitorStackName:
+    Type: String
+    Description: svMonitor stack to use resources from
 Resources:
   # Subnet group to control where the Redis gets placed
   RedisSubnetGroup:
@@ -14,9 +17,9 @@ Resources:
       Description: Group of subnets to place Redis into
       SubnetIds:
         - Fn::ImportValue:
-            !Join [':', [!Ref 'EnvironmentName', 'PublicSubnetOne']]
+            Fn::ImportValue: !Sub ${MonitorStackName}:PublicSubnet0
         - Fn::ImportValue:
-            !Join [':', [!Ref 'EnvironmentName', 'PublicSubnetTwo']]
+            Fn::ImportValue: !Sub ${MonitorStackName}:PublicSubnet1
 
   # Security group to add the Redis cluster to the VPC,
   # and to allow the Fargate containers to talk to Redis on port 6379
@@ -24,9 +27,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: "Redis Security Group"
-      VpcId:
-        Fn::ImportValue:
-          !Join [':', [!Ref 'EnvironmentName', 'VPCId']]
+      VpcId: Fn::ImportValue: !Sub ${MonitorStackName}:VPC
   RedisIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:

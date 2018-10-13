@@ -2,6 +2,9 @@ Parameters:
   EnvironmentName:
     Type: String
     Description: E.g. production, staging, branch name. Must be lowercase (for use in bucket name).
+  MonitorStackName:
+    Type: String
+    Description: svMonitor stack to use resources from
   CertificateArn:
     Type: String
     Description: ARN of the Amazon Certificate Manager SSL certificate to use for this app
@@ -197,7 +200,7 @@ Resources:
       Name: !Ref AWS::StackName
       ServiceRole: !Ref CodeBuildServiceRole
 
-  # Trigger Pipeline when event is triggered signalling bundle.tar.gz is updated in S3.
+  # Trigger Pipeline when event is triggered signalling bundle.zip is updated in S3.
   CloudWatchEventRule:
     Type: AWS::Events::Rule
     Properties:
@@ -214,7 +217,7 @@ Resources:
             - CompleteMultipartUpload
           resources:
             ARN:
-              - !Join [ '', [ !GetAtt ArtifactBucket.Arn, '/bundle.tar.gz'] ]
+              - !Join [ '', [ !GetAtt ArtifactBucket.Arn, '/bundle.zip'] ]
       Targets:
         -
           Arn:
@@ -235,7 +238,7 @@ Resources:
             -
               Type: AWS::S3::Object
               Values:
-                - !Join [ '', [ !GetAtt ArtifactBucket.Arn, '/bundle.tar.gz' ] ]
+                - !Join [ '', [ !GetAtt ArtifactBucket.Arn, '/bundle.zip' ] ]
           ReadWriteType: WriteOnly
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -293,7 +296,7 @@ Resources:
                 Provider: S3
               Configuration:
                 S3Bucket: !Ref ArtifactBucket
-                S3ObjectKey: bundle.tar.gz
+                S3ObjectKey: bundle.zip
               OutputArtifacts:
                 - Name: Source
               RunOrder: 1
@@ -315,6 +318,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM
                 ParameterOverrides: !Sub |
                   {
+                    "MonitorStackName": "${MonitorStackName}",
                     "EnvironmentName": "${EnvironmentName}",
                     "CertificateArn": "${CertificateArn}"
                   }
@@ -341,6 +345,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM
                 ParameterOverrides: !Sub |
                   {
+                    "MonitorStackName": "${MonitorStackName}",
                     "EnvironmentName": "${EnvironmentName}"
                   }
               InputArtifacts:
@@ -380,6 +385,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM
                 ParameterOverrides: !Sub |
                   {
+                    "MonitorStackName": "${MonitorStackName}",
                     "EnvironmentName": "${EnvironmentName}",
                     "ImageUrl": {
                       "Fn::GetParam" : ["BuildOutput", "build.json", "ImageUri"]
