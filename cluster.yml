@@ -52,7 +52,7 @@ Resources:
   RedisSessionsSecurityGroupIngressFromECS:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      Description: Ingress from the public ALB
+      Description: Ingress from the Fargate prototype
       GroupId:
         Fn::ImportValue: !Sub ${MonitorStackName}:RedisSecurityGroup
       IpProtocol: -1
